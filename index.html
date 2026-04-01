@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard (Total + Renew + New) with Pipeline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+	 <!-- DataTables CSS -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+	<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+	<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .chart-container { position: relative; height: 450px; width: 100%; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-[1600px] mx-auto">
+        <header class="mb-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">📊 Sales Performance Dashboard</h1>
+                <p class="text-gray-500">รายงานยอดขายสะสมและ Pipeline</p>
+            </div>
+            <div class="flex items-center gap-2">
+                 <span id="statusIndicator" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-200 text-gray-600">
+                    รอการเชื่อมต่อข้อมูล
+                 </span>
+                 <button onclick="clearCache()" class="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-600 hover:bg-red-200 transition">
+                    ล้างแคช
+                 </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+            <div class="lg:col-span-12 xl:col-span-7 card border-l-4 border-blue-500">
+                <span class="block text-sm font-semibold text-gray-700 mb-4">📁 นำเข้าข้อมูล (เลือกวิธีใดวิธีหนึ่ง)</span>
+                
+                <div class="mb-4">
+                    <span class="text-xs font-bold text-blue-600 mb-1 block">วิธีที่ 1: วางลิงก์ Google Sheet</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="sheetUrl" placeholder="วางลิงก์ที่ได้จาก Publish to web ที่นี่..." 
+                               class="flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <button onclick="loadFromUrl()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 font-medium transition text-sm">
+                            ดึงข้อมูล
+                        </button>
+                    </div>
+                </div>
+
+                <div class="relative flex py-2 items-center">
+                    <div class="flex-grow border-t border-gray-200"></div>
+                    <span class="flex-shrink-0 mx-4 text-gray-400 text-xs">หรือ</span>
+                    <div class="flex-grow border-t border-gray-200"></div>
+                </div>
+
+                <div class="mt-4">
+                    <span class="text-xs font-bold text-green-600 mb-1 block">วิธีที่ 2: อัปโหลดไฟล์ .csv จากคอมพิวเตอร์</span>
+                    <div class="flex gap-2 items-center">
+                        <input type="file" id="csvFileInput" accept=".csv" 
+                               class="flex-1 p-2 border border-gray-300 rounded focus:ring-2 focus:ring-green-500 outline-none text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700 cursor-pointer">
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-12 xl:col-span-5 card border-l-4 border-gray-500">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="block text-sm font-semibold text-gray-700">🔍 ตัวเลือกการแสดงผล</span>
+                    <div class="text-xs text-gray-500 flex gap-3 border px-2 py-1 rounded bg-gray-50">
+                        <span class="flex items-center gap-1"><div class="w-3 h-3 bg-gray-600 rounded-sm"></div> Won</span>
+                        <span class="flex items-center gap-1"><div class="w-3 h-3 bg-red-500 rounded-sm"></div> Lost</span>
+                        <span class="flex items-center gap-1"><div class="w-3 h-3 border border-dashed border-gray-600 rounded-sm bg-transparent"></div> Open</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="col-span-2">
+                        <label for="viewMode" class="text-xs text-gray-500">มุมมอง (View)</label>
+                        <select id="viewMode" onchange="handleViewChange()" class="w-full p-2 border border-blue-300 bg-blue-50 rounded text-sm font-semibold text-blue-900">
+                            <option value="bySale">รายบุคคล (By Salesperson)</option>
+                            <option value="byGroup">รายกลุ่ม (By Sale Group)</option>
+                        </select>
+                    </div>
+                    <div id="groupFilterContainer">
+                        <label for="groupFilter" class="text-xs text-gray-500">กลุ่ม (Group)</label>
+                        <select id="groupFilter" onchange="updateSalesDropdown()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            <option value="all">ทุกกลุ่ม (All)</option>
+                        </select>
+                    </div>
+                    <div id="salesFilterContainer">
+                        <label for="salesFilter" class="text-xs text-gray-500">พนักงาน (Sale)</label>
+                        <select id="salesFilter" onchange="updateDashboard()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                            <option value="all">ทั้งหมด (All)</option>
+                        </select>
+                    </div>
+                    <div class="col-span-1">
+                        <label for="startMonth" class="text-xs text-gray-500">ตั้งแต่</label>
+                        <input type="month" id="startMonth" onchange="updateDashboard()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                    </div>
+                    <div class="col-span-1">
+                        <label for="endMonth" class="text-xs text-gray-500">ถึง</label>
+                        <input type="month" id="endMonth" onchange="updateDashboard()" class="w-full p-2 border border-gray-300 rounded text-sm">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="dashboardContent" class="hidden">
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="card border-t-4 border-blue-500 bg-blue-50">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-blue-500"></span> Total (รวม)
+                        </h3>
+                        <div class="text-right">
+                            <span class="text-xs text-gray-500">Achievement (Won)</span>
+                            <div class="text-xl font-bold text-blue-600" id="kpiTotalPct">0%</div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-sm text-gray-600 mb-2">
+                        <span>ยอดขาย Won: <b id="kpiTotalActual">0</b></span>
+                        <span id="kpiTotalTargetLabel">เป้าหมาย (Target): <b id="kpiTotalTarget">0</b></span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 relative">
+                        <div id="progTotal" class="bg-blue-500 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="card border-t-4 border-green-500">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-green-500"></span> Renew
+                        </h3>
+                        <div class="text-right">
+                            <span class="text-xs text-gray-400">Achievement (Won)</span>
+                            <div class="text-xl font-bold text-green-600" id="kpiRenewPct">0%</div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-sm text-gray-600 mb-2">
+                        <span>ยอดขาย Won: <b id="kpiRenewActual">0</b></span>
+                        <span id="kpiRenewTargetLabel">เป้าหมาย (Target): <b id="kpiRenewTarget">0</b></span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2.5 relative">
+                        <div id="progRenew" class="bg-green-500 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div class="card border-t-4 border-purple-500">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full bg-purple-500"></span> New
+                        </h3>
+                        <div class="text-right">
+                            <span class="text-xs text-gray-400">Achievement (Won)</span>
+                            <div class="text-xl font-bold text-purple-600" id="kpiNewPct">0%</div>
+                        </div>
+                    </div>
+                    <div class="flex justify-between text-sm text-gray-600 mb-2">
+                        <span>ยอดขาย Won: <b id="kpiNewActual">0</b></span>
+                        <span id="kpiNewTargetLabel">เป้าหมาย (Target): <b id="kpiNewTarget">0</b></span>
+                    </div>
+                    <div class="w-full bg-gray-100 rounded-full h-2.5 relative">
+                        <div id="progNew" class="bg-purple-500 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-8 border-t-4 border-blue-500">
+                <h3 class="font-bold text-gray-700 mb-4" id="titleTotal">📈 ยอดขายรวม (Total Renew + New)</h3>
+                <div class="chart-container"><canvas id="chartTotal"></canvas></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="card">
+                    <h3 class="font-bold text-gray-700 mb-4" id="titleRenew">📈 Renew (Amount, %)</h3>
+                    <div class="chart-container"><canvas id="chartRenew"></canvas></div>
+                </div>
+                <div class="card">
+                    <h3 class="font-bold text-gray-700 mb-4" id="titleNew">📈 New (Amount, %)</h3>
+                    <div class="chart-container"><canvas id="chartNew"></canvas></div>
+                </div>
+            </div>
+
+            <div class="card mb-8 border-t-4 border-orange-500">
+                <h3 class="font-bold text-gray-700 mb-4" id="titleMonthly">📅 แนวโน้มยอดขายสะสมรายเดือน (Cumulative Trend)</h3>
+                <div class="chart-container">
+                    <canvas id="chartMonthly"></canvas>
+                </div>
+            </div>
+
+            <div class="card overflow-hidden">
+                <h3 class="font-bold text-gray-700 mb-4">📄 รายละเอียด Transaction</h3>
+                <div class="overflow-x-auto max-h-[500px]">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm" id="TableDataList">
+                        <thead class="bg-gray-50 sticky top-0 shadow-sm z-10">
+                            <tr>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 bg-gray-50">วันที่</th>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 bg-gray-50">พนักงานขาย</th>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 bg-gray-50">กลุ่ม</th>
+                                <th class="px-6 py-3 text-left font-medium text-gray-500 bg-gray-50">ลูกค้า</th>
+                                <th class="px-6 py-3 text-center font-medium text-gray-500 bg-gray-50">ประเภท</th>
+                                <th class="px-6 py-3 text-center font-medium text-gray-500 bg-gray-50">สถานะ</th>
+                                <th class="px-6 py-3 text-right font-medium text-gray-800 bg-gray-50">ยอดขาย</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200" id="tableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Chart.register(ChartDataLabels);
+        let transactions = [];
+        let targets = {};
+        let groups = new Set();
+        let hasMonthlyTargets = false;
+        let globalMonthlyKeys = [];
+        
+        let chartTotalInstance = null;
+        let chartRenewInstance = null;
+        let chartNewInstance = null;
+        let chartMonthlyInstance = null;
+        let dataTableInstance = null;
+
+        const formatter = new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        const numFormat = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 0 });
+
+        const savedUrl = localStorage.getItem('sheetUrl');
+        if(savedUrl) document.getElementById('sheetUrl').value = savedUrl;
+
+        // Load cached data on page startup
+        function loadCacheData() {
+            const cached = localStorage.getItem('dashboardCacheData');
+            if(cached) {
+                try {
+                    const data = JSON.parse(cached);
+                    transactions = data.transactions || [];
+                    targets = data.targets || {};
+                    groups = new Set(data.groups || []);
+                    hasMonthlyTargets = data.hasMonthlyTargets || false;
+                    globalMonthlyKeys = data.globalMonthlyKeys || [];
+                    
+                    if(transactions.length > 0) {
+                        initFilters();
+                        updateDashboard();
+                        document.getElementById('dashboardContent').classList.remove('hidden');
+                        updateStatus('success', 'เชื่อมต่อข้อมูลจากแคช');
+                        return true;
+                    }
+                } catch(e) {
+                    console.log('Cache load failed:', e);
+                    localStorage.removeItem('dashboardCacheData');
+                }
+            }
+            return false;
+        }
+
+        // Save data to cache
+        function saveCacheData() {
+            const cacheObj = {
+                transactions: transactions,
+                targets: targets,
+                groups: Array.from(groups),
+                hasMonthlyTargets: hasMonthlyTargets,
+                globalMonthlyKeys: globalMonthlyKeys
+            };
+            try {
+                localStorage.setItem('dashboardCacheData', JSON.stringify(cacheObj));
+            } catch(e) {
+                console.log('Cache save failed:', e);
+            }
+        }
+
+        // Clear cache
+        function clearCache() {
+            localStorage.removeItem('dashboardCacheData');
+            localStorage.removeItem('sheetUrl');
+            transactions = [];
+            targets = {};
+            groups = new Set();
+            hasMonthlyTargets = false;
+            globalMonthlyKeys = [];
+            document.getElementById('dashboardContent').classList.add('hidden');
+            document.getElementById('sheetUrl').value = '';
+            document.getElementById('csvFileInput').value = '';
+            updateStatus('success', 'ล้างแคชเสร็จสิ้น');
+        }
+
+        // Try to load cached data on page load
+        window.addEventListener('load', function() {
+            loadCacheData();
+        });
+
+        function reinitDataTable() {
+            if (dataTableInstance) {
+                dataTableInstance.destroy();
+            }
+            dataTableInstance = $('#TableDataList').DataTable({
+                "paging": true,
+                "pageLength": 100
+            });
+        }
+
+        function handleParseResult(results) {
+            if(results.data && results.data.length > 0) {
+                if(processData(results.data)) {
+                    updateStatus('success', 'เชื่อมต่อข้อมูลสำเร็จ');
+                    document.getElementById('dashboardContent').classList.remove('hidden');
+                } else {
+                    updateStatus('error', 'รูปแบบข้อมูลไม่ถูกต้อง');
+                }
+            } else {
+                updateStatus('error', 'ไม่พบข้อมูล');
+            }
+        }
+
+        function loadFromUrl() {
+            const url = document.getElementById('sheetUrl').value.trim();
+            if(!url) { alert("กรุณาวางลิงก์ Google Sheet ก่อนค่ะ"); return; }
+            localStorage.setItem('sheetUrl', url);
+            updateStatus('loading', 'กำลังดึงข้อมูลจากลิงก์...');
+            Papa.parse(url, {
+                download: true, header: false, skipEmptyLines: true,
+                complete: function(results) { handleParseResult(results); },
+                error: function(err) { updateStatus('error', 'ดึงข้อมูลล้มเหลว ตรวจสอบลิงก์อีกครั้ง'); }
+            });
+        }
+
+        document.getElementById('csvFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            updateStatus('loading', 'กำลังอ่านไฟล์...');
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                Papa.parse(event.target.result, {
+                    header: false, skipEmptyLines: true,
+                    complete: function(results) { handleParseResult(results); },
+                    error: function(err) { updateStatus('error', 'การอ่านไฟล์ล้มเหลว'); }
+                });
+            };
+            reader.readAsText(file);
+        });
+
+        function updateStatus(type, text) {
+            const el = document.getElementById('statusIndicator');
+            el.innerText = text;
+            el.className = `px-3 py-1 rounded-full text-xs font-bold ${
+                type === 'success' ? 'bg-green-100 text-green-700' :
+                type === 'loading' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+            }`;
+        }
+
+        function cleanNum(val) {
+            if (typeof val === 'number') return val;
+            if (!val) return 0;
+            return parseFloat(val.replace(/,/g, '')) || 0;
+        }
+
+        function normalizeDate(str) {
+            if(!str) return "";
+            if(str.includes('/')) {
+                const parts = str.split('/');
+                if(parts.length === 3) {
+                    let d = parts[0].padStart(2, '0');
+                    let m = parts[1].padStart(2, '0');
+                    let y = parts[2];
+                    if(y.length === 2) y = "20" + y; 
+                    return `${y}-${m}-${d}`;
+                }
+            }
+            if(str.match(/^\d{4}-\d{2}-\d{2}$/)) return str;
+            const d = new Date(str);
+            if(!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+            return ""; 
+        }
+
+        function processData(rows) {
+            transactions = [];
+            targets = {};
+            groups = new Set();
+            hasMonthlyTargets = false;
+            globalMonthlyKeys = [];
+
+            const header = rows[0].map(c => (c||"").toString().toLowerCase().trim());
+            const subHeader = rows[1] ? rows[1].map(c => (c||"").toString().trim()) : [];
+            
+            const idxTransSales = header.indexOf('sales');
+            const idxDate = header.indexOf('date');
+            const idxCust = header.findIndex(c => c.includes('customer') || c.includes('project'));
+            const idxType = header.findIndex(c => c.includes('type'));
+            const idxStatus = header.findIndex(c => c.includes('status') || c.includes('สถานะ'));
+            const idxAmount = header.findIndex(c => c === 'amount');
+
+            const idxTargetSales = header.lastIndexOf('sales'); 
+            let idxTargetGroup = header.lastIndexOf('sale group');
+            if (idxTargetGroup === -1) {
+                for(let i = idxTargetSales + 1; i < header.length; i++) {
+                    if(header[i].includes('group')) { idxTargetGroup = i; break; }
+                }
+            }
+
+            let idxTargetRenew = -1, idxTargetNew = -1;
+            let monthlyRenewCols = {};
+            let monthlyNewCols = {};
+
+            for(let i = idxTargetSales + 1; i < header.length; i++) {
+                let col = header[i];
+                let sub = subHeader[i];
+                
+                if (idxTargetRenew === -1 && col.includes('renew') && col.includes('target') && (!sub || !sub.match(/^\d{4}-\d{2}$/))) {
+                    idxTargetRenew = i;
+                }
+                if (idxTargetNew === -1 && col.includes('new') && !col.includes('renew') && col.includes('target') && (!sub || !sub.match(/^\d{4}-\d{2}$/))) {
+                    idxTargetNew = i;
+                }
+                
+                if (sub && sub.match(/^\d{4}-\d{2}$/)) { 
+                    if (col.includes('renew')) {
+                        monthlyRenewCols[sub] = i;
+                    } else if (col.includes('new') && !col.includes('renew')) {
+                        monthlyNewCols[sub] = i;
+                    }
+                } else {
+                    let mMatch = col.match(/(20\d{2}-\d{2})/);
+                    if (mMatch) {
+                        if (col.includes('renew')) {
+                            monthlyRenewCols[mMatch[1]] = i;
+                        } else if (col.includes('new') && !col.includes('renew')) {
+                            monthlyNewCols[mMatch[1]] = i;
+                        }
+                    }
+                }
+            }
+
+            if(idxTargetRenew === -1) idxTargetRenew = header.findIndex(c => c.includes('renew') && c.includes('target'));
+            if(idxTargetNew === -1) idxTargetNew = header.findIndex(c => c.includes('new') && !col.includes('renew') && c.includes('target'));
+
+            globalMonthlyKeys = Object.keys(monthlyRenewCols).sort();
+            hasMonthlyTargets = globalMonthlyKeys.length > 0;
+
+            if (idxTransSales === -1 || idxDate === -1 || idxAmount === -1) {
+                alert("ไม่พบคอลัมน์ Sales, Date หรือ Amount");
+                return false;
+            }
+
+            for (let i = 1; i < rows.length; i++) {
+                const row = rows[i];
+                
+                if (i === 1 && idxTargetRenew !== -1 && subHeader[idxTargetRenew] && subHeader[idxTargetRenew].match(/20\d{2}/)) continue;
+
+                if (row[idxTransSales] && row[idxAmount]) {
+                    let statusStr = 'won';
+                    if (idxStatus !== -1 && row[idxStatus]) {
+                        statusStr = row[idxStatus].trim().toLowerCase();
+                    }
+                    let finalStatus = 'won';
+                    if (statusStr.includes('open')) finalStatus = 'open';
+                    else if (statusStr.includes('lost') || statusStr.includes('lose') || statusStr.includes('cancel') || statusStr.includes('fail')) finalStatus = 'lost';
+                    else if (statusStr.includes('commit')) finalStatus = 'commit';
+                    else if (statusStr.includes('upside')) finalStatus = 'upside';
+
+                    transactions.push({
+                        sales: (row[idxTransSales] || "").trim(),
+                        date: normalizeDate(row[idxDate]),
+                        cust: row[idxCust] || "-",
+                        type: row[idxType] || "Unknown",
+                        status: finalStatus,
+                        amount: cleanNum(row[idxAmount])
+                    });
+                }
+                
+                if (idxTargetSales !== -1 && idxTargetSales > idxTransSales && row[idxTargetSales]) {
+                    const name = (row[idxTargetSales] || "").trim();
+                    if(!name) continue;
+
+                    let tRenew = idxTargetRenew !== -1 ? cleanNum(row[idxTargetRenew]) : 0;
+                    let tNew = idxTargetNew !== -1 ? cleanNum(row[idxTargetNew]) : 0;
+                    const group = idxTargetGroup !== -1 ? (row[idxTargetGroup] || "Other").trim() : "Other";
+
+                    let mRenew = {};
+                    for(let m in monthlyRenewCols) {
+                        mRenew[m] = cleanNum(row[monthlyRenewCols[m]]);
+                    }
+
+                    let mNew = {};
+                    for(let m in monthlyNewCols) {
+                        mNew[m] = cleanNum(row[monthlyNewCols[m]]);
+                    }
+
+                    targets[name] = { group: group, renew: tRenew, new: tNew, mRenew: mRenew, mNew: mNew };
+                    if(group) groups.add(group);
+                }
+            }
+
+            initFilters();
+            if(transactions.length > 0) {
+                const months = transactions.map(t => t.date.substring(0, 7)).filter(d => d.length === 7);
+                const distinctMonths = [...new Set(months)].sort();
+                if(distinctMonths.length > 0) {
+                    document.getElementById('startMonth').value = distinctMonths[0];
+                    document.getElementById('endMonth').value = distinctMonths[distinctMonths.length - 1];
+                }
+            }
+            updateDashboard();
+            saveCacheData(); // Save to cache after successful processing
+            return true;
+        }
+
+        function initFilters() {
+            const groupSel = document.getElementById('groupFilter');
+            groupSel.innerHTML = '<option value="all">ทุกกลุ่ม (All Groups)</option>';
+            [...groups].sort().forEach(g => { groupSel.innerHTML += `<option value="${g}">${g}</option>`; });
+            updateSalesDropdown();
+        }
+
+        function updateSalesDropdown() {
+            const groupVal = document.getElementById('groupFilter').value;
+            const salesSel = document.getElementById('salesFilter');
+            const currentSale = salesSel.value;
+            salesSel.innerHTML = '<option value="all">ทั้งหมด (All)</option>';
+            const salesNames = Object.keys(targets).filter(name => groupVal === 'all' || targets[name].group === groupVal);
+            salesNames.sort().forEach(s => { salesSel.innerHTML += `<option value="${s}">${s}</option>`; });
+            salesSel.value = salesNames.includes(currentSale) ? currentSale : 'all';
+            updateDashboard();
+        }
+
+        function handleViewChange() { updateDashboard(); }
+
+        function updateDashboard() {
+            const viewMode = document.getElementById('viewMode').value;
+            const selGroup = document.getElementById('groupFilter').value;
+            const selSale = document.getElementById('salesFilter').value;
+            const sMonth = document.getElementById('startMonth').value;
+            const eMonth = document.getElementById('endMonth').value;
+
+            const isMonthFiltered = (sMonth && eMonth);
+
+            const labelStr = isMonthFiltered ? `เป้าหมาย (${sMonth} ถึง ${eMonth}): ` : `เป้าหมายรวมทั้งปี (Year Target): `;
+            document.getElementById('kpiTotalTargetLabel').innerHTML = `${labelStr}<b id="kpiTotalTarget">0</b>`;
+            document.getElementById('kpiRenewTargetLabel').innerHTML = `${labelStr}<b id="kpiRenewTarget">0</b>`;
+            document.getElementById('kpiNewTargetLabel').innerHTML = `${labelStr}<b id="kpiNewTarget">0</b>`;
+
+            const filtered = transactions.filter(t => {
+                if(!t.date) return false;
+                const d = t.date.substring(0, 7);
+                const matchDate = (!isMonthFiltered) || (d >= sMonth && d <= eMonth);
+                const tGroup = targets[t.sales] ? targets[t.sales].group : "Other";
+                const matchGroup = (selGroup === 'all' || tGroup === selGroup);
+                const matchSale = (selSale === 'all' || t.sales === selSale);
+                return matchDate && matchGroup && matchSale;
+            });
+
+            let displayMonths = [];
+            if (isMonthFiltered) {
+                let curr = new Date(sMonth + "-01");
+                const end = new Date(eMonth + "-01");
+                while (curr <= end) { displayMonths.push(curr.toISOString().slice(0, 7)); curr.setMonth(curr.getMonth() + 1); }
+            } else {
+                if (hasMonthlyTargets && globalMonthlyKeys.length > 0) {
+                    displayMonths = [...globalMonthlyKeys]; 
+                } else {
+                    displayMonths = [...new Set(filtered.map(t => t.date.substring(0,7)))].sort();
+                    if(displayMonths.length === 0) displayMonths = [new Date().toISOString().slice(0,7)];
+                }
+            }
+
+            let actRenewWon = 0, actNewWon = 0;
+            let tarRenew = 0, tarNew = 0;
+            const chartData = {}; 
+            const monthlyWon = {}, monthlyCommit = {}, monthlyUpside = {}, monthlyLost = {}, monthlyOpen = {};
+
+            if (viewMode === 'byGroup') {
+                const relevantGroups = selGroup === 'all' ? [...groups] : [selGroup];
+                relevantGroups.forEach(g => chartData[g] = { renewWon: 0, renewCommit: 0, renewUpside: 0, renewOpen: 0, renewLost: 0, newWon: 0, newCommit: 0, newUpside: 0, newOpen: 0, newLost: 0, tRenew: 0, tNew: 0 });
+                
+                Object.keys(targets).forEach(name => {
+                    const g = targets[name].group;
+                    if (chartData[g]) {
+                        let sumR = 0, sumN = 0;
+                        if(hasMonthlyTargets && isMonthFiltered) {
+                            displayMonths.forEach(m => { sumR += targets[name].mRenew[m] || 0; sumN += targets[name].mNew[m] || 0; });
+                        } else {
+                            sumR = targets[name].renew; sumN = targets[name].new;
+                        }
+                        chartData[g].tRenew += sumR;
+                        chartData[g].tNew += sumN;
+                        if(selGroup === 'all' || selGroup === g) { tarRenew += sumR; tarNew += sumN; }
+                    }
+                });
+
+                filtered.forEach(t => {
+                    const g = targets[t.sales] ? targets[t.sales].group : "Other";
+                    if(!chartData[g] && selGroup === 'all') chartData[g] = { renewWon: 0, renewCommit: 0, renewUpside: 0, renewOpen: 0, renewLost: 0, newWon: 0, newCommit: 0, newUpside: 0, newOpen: 0, newLost: 0, tRenew: 0, tNew: 0 };
+                    if(chartData[g]) {
+                        if(t.type.toLowerCase().includes('renew')) {
+                            if(t.status === 'won') { actRenewWon += t.amount; chartData[g].renewWon += t.amount; }
+                            else if(t.status === 'commit') { chartData[g].renewCommit += t.amount; }
+                            else if(t.status === 'upside') { chartData[g].renewUpside += t.amount; }
+                            else if(t.status === 'open') { chartData[g].renewOpen += t.amount; }
+                            else if(t.status === 'lost') { chartData[g].renewLost += t.amount; }
+                        } else if(t.type.toLowerCase().includes('new')) {
+                            if(t.status === 'won') { actNewWon += t.amount; chartData[g].newWon += t.amount; }
+                            else if(t.status === 'commit') { chartData[g].newCommit += t.amount; }
+                            else if(t.status === 'upside') { chartData[g].newUpside += t.amount; }
+                            else if(t.status === 'open') { chartData[g].newOpen += t.amount; }
+                            else if(t.status === 'lost') { chartData[g].newLost += t.amount; }
+                        }
+                    }
+                });
+            } else {
+                if (selSale === 'all') {
+                    Object.keys(targets).forEach(name => {
+                        if(selGroup === 'all' || targets[name].group === selGroup) {
+                            let sumR = 0, sumN = 0;
+                            if(hasMonthlyTargets && isMonthFiltered) {
+                                displayMonths.forEach(m => { sumR += targets[name].mRenew[m] || 0; sumN += targets[name].mNew[m] || 0; });
+                            } else {
+                                sumR = targets[name].renew; sumN = targets[name].new;
+                            }
+                            chartData[name] = { renewWon: 0, renewCommit: 0, renewUpside: 0, renewOpen: 0, renewLost: 0, newWon: 0, newCommit: 0, newUpside: 0, newOpen: 0, newLost: 0, tRenew: sumR, tNew: sumN };
+                            tarRenew += sumR; tarNew += sumN;
+                        }
+                    });
+                    filtered.forEach(t => {
+                        const tGroup = targets[t.sales] ? targets[t.sales].group : "Other";
+                        if((selGroup === 'all' || tGroup === selGroup)) {
+                            if(!chartData[t.sales]) chartData[t.sales] = { renewWon: 0, renewCommit: 0, renewUpside: 0, renewOpen: 0, renewLost: 0, newWon: 0, newCommit: 0, newUpside: 0, newOpen: 0, newLost: 0, tRenew: 0, tNew: 0 };
+                            if(t.type.toLowerCase().includes('renew')) {
+                                if(t.status === 'won') { actRenewWon += t.amount; chartData[t.sales].renewWon += t.amount; }
+                            else if(t.status === 'commit') { chartData[t.sales].renewCommit += t.amount; }
+                            else if(t.status === 'upside') { chartData[t.sales].renewUpside += t.amount; }
+                            else if(t.status === 'open') { chartData[t.sales].renewOpen += t.amount; }
+                            else if(t.status === 'lost') { chartData[t.sales].renewLost += t.amount; }
+                            } else if(t.type.toLowerCase().includes('new')) {
+                                if(t.status === 'won') { actNewWon += t.amount; chartData[t.sales].newWon += t.amount; }
+                            else if(t.status === 'commit') { chartData[t.sales].newCommit += t.amount; }
+                            else if(t.status === 'upside') { chartData[t.sales].newUpside += t.amount; }
+                            else if(t.status === 'open') { chartData[t.sales].newOpen += t.amount; }
+                            else if(t.status === 'lost') { chartData[t.sales].newLost += t.amount; }
+                            }
+                        }
+                    });
+                } else {
+                    if(targets[selSale]) { 
+                        if(hasMonthlyTargets && isMonthFiltered) {
+                            displayMonths.forEach(m => { tarRenew += targets[selSale].mRenew[m] || 0; tarNew += targets[selSale].mNew[m] || 0; });
+                        } else {
+                            tarRenew = targets[selSale].renew; tarNew = targets[selSale].new; 
+                        }
+                    }
+                    filtered.forEach(t => {
+                        if(!chartData[t.cust]) chartData[t.cust] = { renewWon: 0, renewCommit: 0, renewUpside: 0, renewOpen: 0, renewLost: 0, newWon: 0, newCommit: 0, newUpside: 0, newOpen: 0, newLost: 0, tRenew: 0, tNew: 0 };
+                        if(t.type.toLowerCase().includes('renew')) {
+                            if(t.status === 'won') { actRenewWon += t.amount; chartData[t.cust].renewWon += t.amount; }
+                            else if(t.status === 'commit') { chartData[t.cust].renewCommit += t.amount; }
+                            else if(t.status === 'upside') { chartData[t.cust].renewUpside += t.amount; }
+                            else if(t.status === 'open') { chartData[t.cust].renewOpen += t.amount; }
+                            else if(t.status === 'lost') { chartData[t.cust].renewLost += t.amount; }
+                        } else if(t.type.toLowerCase().includes('new')) {
+                            if(t.status === 'won') { actNewWon += t.amount; chartData[t.cust].newWon += t.amount; }
+                            else if(t.status === 'commit') { chartData[t.cust].newCommit += t.amount; }
+                            else if(t.status === 'upside') { chartData[t.cust].newUpside += t.amount; }
+                            else if(t.status === 'open') { chartData[t.cust].newOpen += t.amount; }
+                            else if(t.status === 'lost') { chartData[t.cust].newLost += t.amount; }
+                        }
+                    });
+                }
+            }
+
+            filtered.forEach(t => {
+                const ym = t.date.substring(0, 7);
+                if (!monthlyWon[ym]) { monthlyWon[ym] = 0; monthlyCommit[ym] = 0; monthlyUpside[ym] = 0; monthlyLost[ym] = 0; monthlyOpen[ym] = 0; }
+                if(t.status === 'won') monthlyWon[ym] += t.amount;
+                else if(t.status === 'commit') monthlyCommit[ym] += t.amount;
+                else if(t.status === 'upside') monthlyUpside[ym] += t.amount;
+                else if(t.status === 'lost') monthlyLost[ym] += t.amount;
+                else if(t.status === 'open') monthlyOpen[ym] += t.amount;
+            });
+
+            let runningWon = 0, runningCommit = 0, runningUpside = 0, runningLost = 0, runningOpen = 0, runningTarget = 0;
+            const cumWon = [], cumCommitFloat = [], cumUpsideFloat = [], cumLostFloat = [], cumOpenFloat = [], cumTargets = [];
+            
+            displayMonths.forEach((m, idx) => {
+                runningWon += (monthlyWon[m] || 0);
+                runningCommit += (monthlyCommit[m] || 0);
+                runningUpside += (monthlyUpside[m] || 0);
+                runningLost += (monthlyLost[m] || 0);
+                runningOpen += (monthlyOpen[m] || 0);
+                cumWon.push(runningWon);
+                cumCommitFloat.push([runningWon, runningWon + runningCommit]);
+                cumUpsideFloat.push([runningWon + runningCommit, runningWon + runningCommit + runningUpside]);
+                cumOpenFloat.push([runningWon + runningCommit + runningUpside, runningWon + runningCommit + runningUpside + runningOpen]);
+                cumLostFloat.push([runningWon + runningCommit + runningUpside + runningOpen, runningWon + runningCommit + runningUpside + runningOpen + runningLost]);
+                
+                if(hasMonthlyTargets) {
+                    let mTarget = 0;
+                    Object.keys(targets).forEach(name => {
+                        if (selGroup === 'all' || targets[name].group === selGroup) {
+                            if (selSale === 'all' || selSale === name) {
+                                mTarget += (targets[name].mRenew[m] || 0) + (targets[name].mNew[m] || 0);
+                            }
+                        }
+                    });
+                    runningTarget += mTarget;
+                    cumTargets.push(runningTarget);
+                } else {
+                    const totalAnnualTarget = Object.keys(targets).reduce((acc, name) => {
+                        if (selGroup === 'all' || targets[name].group === selGroup) {
+                            if (selSale === 'all' || selSale === name) { return acc + targets[name].renew + targets[name].new; }
+                        }
+                        return acc;
+                    }, 0);
+                    cumTargets.push((totalAnnualTarget / 12) * (idx + 1)); 
+                }
+            });
+
+            let actTotalWon = actRenewWon + actNewWon;
+            let tarTotal = tarRenew + tarNew;
+            
+            const pctTotal = tarTotal > 0 ? (actTotalWon / tarTotal) * 100 : 0;
+            document.getElementById('kpiTotalActual').innerText = formatter.format(actTotalWon);
+            document.getElementById('kpiTotalTarget').innerText = numFormat.format(tarTotal);
+            document.getElementById('kpiTotalPct').innerText = pctTotal.toFixed(1) + '%';
+            document.getElementById('progTotal').style.width = Math.min(pctTotal, 100) + '%';
+
+            const pctR = tarRenew > 0 ? (actRenewWon / tarRenew) * 100 : 0;
+            document.getElementById('kpiRenewActual').innerText = formatter.format(actRenewWon);
+            document.getElementById('kpiRenewTarget').innerText = numFormat.format(tarRenew);
+            document.getElementById('kpiRenewPct').innerText = pctR.toFixed(1) + '%';
+            document.getElementById('progRenew').style.width = Math.min(pctR, 100) + '%';
+
+            const pctN = tarNew > 0 ? (actNewWon / tarNew) * 100 : 0;
+            document.getElementById('kpiNewActual').innerText = formatter.format(actNewWon);
+            document.getElementById('kpiNewTarget').innerText = numFormat.format(tarNew);
+            document.getElementById('kpiNewPct').innerText = pctN.toFixed(1) + '%';
+            document.getElementById('progNew').style.width = Math.min(pctN, 100) + '%';
+
+            const isCustomerView = (viewMode === 'bySale' && selSale !== 'all');
+            
+            updateTotalChart('chartTotal', chartData, !isCustomerView);
+            updateStatusChart('chartRenew', chartData, 'renew', 'rgba(34, 197, 94, 0.8)', 'rgba(34, 197, 94, 1)', !isCustomerView); 
+            updateStatusChart('chartNew', chartData, 'new', 'rgba(147, 51, 234, 0.8)', 'rgba(147, 51, 234, 1)', !isCustomerView);
+            updateMonthlyChart('chartMonthly', displayMonths, cumWon, cumCommitFloat, cumUpsideFloat, cumOpenFloat, cumLostFloat, cumTargets);
+
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            const sortedTrans = [...filtered].sort((a,b) => b.date.localeCompare(a.date));
+            sortedTrans.forEach(t => {
+                const groupName = targets[t.sales] ? targets[t.sales].group : "-";
+                const isRenew = t.type.toLowerCase().includes('renew');
+                
+                let statusBadge = '';
+                if (t.status === 'won') {
+                    statusBadge = '<span class="px-2 py-1 rounded text-xs font-bold bg-blue-100 text-blue-700">Won</span>';
+                } else if (t.status === 'commit') {
+                    statusBadge = '<span class="px-2 py-1 rounded text-xs font-bold bg-indigo-100 text-indigo-700">Commit</span>';
+                } else if (t.status === 'upside') {
+                    statusBadge = '<span class="px-2 py-1 rounded text-xs font-bold bg-cyan-100 text-cyan-700">Upside</span>';
+                } else if (t.status === 'lost') {
+                    statusBadge = '<span class="px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-700">Lost</span>';
+                } else {
+                    statusBadge = '<span class="px-2 py-1 rounded text-xs font-bold border border-dashed border-gray-400 text-gray-600">Open</span>';
+                }
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 border-b">
+                        <td class="px-6 py-3 text-gray-700 whitespace-nowrap">${t.date}</td>
+                        <td class="px-6 py-3 font-bold text-gray-800">${t.sales}</td>
+                        <td class="px-6 py-3 text-gray-600">${groupName}</td>
+                        <td class="px-6 py-3 text-gray-600 truncate max-w-[200px]" title="${t.cust}">${t.cust}</td>
+                        <td class="px-6 py-3 text-center">
+                            <span class="px-2 py-1 rounded text-xs font-bold ${isRenew ? 'bg-green-100 text-green-700' : 'bg-purple-100 text-purple-700'}">
+                                ${t.type}
+                            </span>
+                        </td>
+                        <td class="px-6 py-3 text-center">
+                            ${statusBadge}
+                        </td>
+                        <td class="px-6 py-3 text-right font-medium text-gray-800">${numFormat.format(t.amount)}</td>
+                    </tr>
+                `;
+            });
+            if(filtered.length === 0) tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-gray-400">ไม่พบข้อมูล</td></tr>';
+            
+            // Reinitialize DataTable after updating rows
+            reinitDataTable();
+        }
+
+        function tooltipCallback(c) {
+            let val = c.raw;
+            if(Array.isArray(val)) val = val[1] - val[0]; 
+            return `${c.dataset.label}: ${numFormat.format(val)}`;
+        }
+
+        function updateTotalChart(canvasId, dataMap, showTarget) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            let labels = Object.keys(dataMap).filter(k => (dataMap[k].renewWon + dataMap[k].renewCommit + dataMap[k].renewUpside + dataMap[k].renewOpen + dataMap[k].renewLost + dataMap[k].newWon + dataMap[k].newCommit + dataMap[k].newUpside + dataMap[k].newOpen + dataMap[k].newLost) > 0 || (showTarget && (dataMap[k].tRenew + dataMap[k].tNew) > 0));
+            
+            labels.sort((a,b) => {
+                if(showTarget) return (dataMap[b].tRenew + dataMap[b].tNew) - (dataMap[a].tRenew + dataMap[a].tNew); 
+                const aTotal = dataMap[a].renewWon + dataMap[a].renewCommit + dataMap[a].renewUpside + dataMap[a].renewOpen + dataMap[a].renewLost + dataMap[a].newWon + dataMap[a].newCommit + dataMap[a].newUpside + dataMap[a].newOpen + dataMap[a].newLost;
+                const bTotal = dataMap[b].renewWon + dataMap[b].renewCommit + dataMap[b].renewUpside + dataMap[b].renewOpen + dataMap[b].renewLost + dataMap[b].newWon + dataMap[b].newCommit + dataMap[b].newUpside + dataMap[b].newOpen + dataMap[b].newLost;
+                return bTotal - aTotal; 
+            });
+            labels = labels.slice(0, 10);
+            
+            const dataWon = labels.map(k => dataMap[k].renewWon + dataMap[k].newWon);
+            const dataCommit = labels.map(k => {
+                const w = dataMap[k].renewWon + dataMap[k].newWon;
+                const c = dataMap[k].renewCommit + dataMap[k].newCommit;
+                return [w, w + c];
+            });
+            const dataUpside = labels.map(k => {
+                const w = dataMap[k].renewWon + dataMap[k].newWon;
+                const c = dataMap[k].renewCommit + dataMap[k].newCommit;
+                const u = dataMap[k].renewUpside + dataMap[k].newUpside;
+                return [w + c, w + c + u];
+            });
+            const dataOpen = labels.map(k => {
+                const w = dataMap[k].renewWon + dataMap[k].newWon;
+                const c = dataMap[k].renewCommit + dataMap[k].newCommit;
+                const u = dataMap[k].renewUpside + dataMap[k].newUpside;
+                const o = dataMap[k].renewOpen + dataMap[k].newOpen;
+                return [w + c + u, w + c + u + o]; 
+            });
+            const dataLost = labels.map(k => {
+                const w = dataMap[k].renewWon + dataMap[k].newWon;
+                const c = dataMap[k].renewCommit + dataMap[k].newCommit;
+                const u = dataMap[k].renewUpside + dataMap[k].newUpside;
+                const o = dataMap[k].renewOpen + dataMap[k].newOpen;
+                const l = dataMap[k].renewLost + dataMap[k].newLost;
+                return [w + c + u + o, w + c + u + o + l];
+            });
+            const targetsData = labels.map(k => dataMap[k].tRenew + dataMap[k].tNew);
+            const displayTargets = showTarget ? targetsData : [];
+
+            if (chartTotalInstance) chartTotalInstance.destroy();
+
+            const colorBase = 'rgba(30, 64, 175, 1)'; // blue-800
+            const colorCommit = 'rgba(30, 64, 175, 0.7)';
+            const colorUpside = 'rgba(30, 64, 175, 0.4)';
+
+            chartTotalInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'เป้าหมายรวม', data: displayTargets,
+                            backgroundColor: 'transparent', borderColor: colorBase, borderWidth: 2, borderSkipped: false,           
+                            barThickness: 40, order: 5, datalabels: { display: false }
+                        },
+                        {
+                            label: 'ยอด Lost', data: dataLost,
+                            backgroundColor: 'rgba(239, 68, 68, 1)', borderColor: colorBase,
+                            borderWidth: (context) => { const val = context.raw; return (val && val[1] > val[0]) ? 2 : 0; },
+                            barThickness: 24, order: 4, borderSkipped: false,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const lostAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    return lostAmt > 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = dataCommit[ctx.dataIndex][1] - dataCommit[ctx.dataIndex][0];
+                                    const upsideAmt = dataUpside[ctx.dataIndex][1] - dataUpside[ctx.dataIndex][0];
+                                    const openAmt = dataOpen[ctx.dataIndex][1] - dataOpen[ctx.dataIndex][0];
+                                    const lostAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    if(openAmt > 0) text += ` + {Open ${numFormat.format(openAmt)}}`;
+                                    if(lostAmt > 0) text += ` + {Lost ${numFormat.format(lostAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Open', data: dataOpen,
+                            backgroundColor: 'transparent', borderColor: colorBase, borderDash: [5, 5], 
+                            borderWidth: (context) => { const val = context.raw; return (val && val[1] > val[0]) ? 2 : 0; }, 
+                            barThickness: 24, order: 3, borderSkipped: false,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const openAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return openAmt > 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = dataCommit[ctx.dataIndex][1] - dataCommit[ctx.dataIndex][0];
+                                    const upsideAmt = dataUpside[ctx.dataIndex][1] - dataUpside[ctx.dataIndex][0];
+                                    const openAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    if(openAmt > 0) text += ` + {Open ${numFormat.format(openAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Upside', data: dataUpside,
+                            backgroundColor: colorUpside, borderWidth: 0, barThickness: 24, order: 2, 
+                            datalabels: { 
+                                display: function(context) { 
+                                    const upsideAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const openAmt = dataOpen[context.dataIndex][1] - dataOpen[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return upsideAmt > 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = dataCommit[ctx.dataIndex][1] - dataCommit[ctx.dataIndex][0];
+                                    const upsideAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Commit', data: dataCommit,
+                            backgroundColor: colorCommit, borderWidth: 0, barThickness: 24, order: 1, 
+                            datalabels: { 
+                                display: function(context) { 
+                                    const commitAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const upsideAmt = dataUpside[context.dataIndex][1] - dataUpside[context.dataIndex][0];
+                                    const openAmt = dataOpen[context.dataIndex][1] - dataOpen[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return commitAmt > 0 && upsideAmt === 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Won', data: dataWon,
+                            backgroundColor: colorBase, borderWidth: 0, barThickness: 24, order: 0, 
+                            datalabels: { 
+                                display: function(context) { 
+                                    const wonAmt = context.dataset.data[context.dataIndex];
+                                    const commitAmt = dataCommit[context.dataIndex][1] - dataCommit[context.dataIndex][0];
+                                    const upsideAmt = dataUpside[context.dataIndex][1] - dataUpside[context.dataIndex][0];
+                                    const openAmt = dataOpen[context.dataIndex][1] - dataOpen[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return wonAmt > 0 && commitAmt === 0 && upsideAmt === 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = val;
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    return text;
+                                }
+                            }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    scales: { x: { beginAtZero: true, grid: { display: false } }, y: { grid: { display: false }, stacked: true } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipCallback } } },
+                    layout: { padding: { right: 220, top: 20 } } 
+                }
+            });
+        }
+
+        function updateStatusChart(canvasId, dataMap, type, colorSolid, colorBorder, showTarget) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const targetKey = type === 'renew' ? 'tRenew' : 'tNew';
+            
+            let labels = Object.keys(dataMap).filter(k => (dataMap[k][type+'Won'] + dataMap[k][type+'Commit'] + dataMap[k][type+'Upside'] + dataMap[k][type+'Open'] + dataMap[k][type+'Lost']) > 0 || (showTarget && dataMap[k][targetKey] > 0));
+            labels.sort((a,b) => {
+                if(showTarget) return dataMap[b][targetKey] - dataMap[a][targetKey]; 
+                const aTotal = dataMap[a][type+'Won'] + dataMap[a][type+'Commit'] + dataMap[a][type+'Upside'] + dataMap[a][type+'Open'] + dataMap[a][type+'Lost'];
+                const bTotal = dataMap[b][type+'Won'] + dataMap[b][type+'Commit'] + dataMap[b][type+'Upside'] + dataMap[b][type+'Open'] + dataMap[b][type+'Lost'];
+                return bTotal - aTotal; 
+            });
+            labels = labels.slice(0, 10);
+            
+            const dataWon = labels.map(k => dataMap[k][type+'Won']);
+            const dataCommit = labels.map(k => {
+                const w = dataMap[k][type+'Won'];
+                const c = dataMap[k][type+'Commit'];
+                return [w, w + c];
+            });
+            const dataUpside = labels.map(k => {
+                const w = dataMap[k][type+'Won'];
+                const c = dataMap[k][type+'Commit'];
+                const u = dataMap[k][type+'Upside'];
+                return [w + c, w + c + u];
+            });
+            const dataOpen = labels.map(k => {
+                const w = dataMap[k][type+'Won'];
+                const c = dataMap[k][type+'Commit'];
+                const u = dataMap[k][type+'Upside'];
+                const o = dataMap[k][type+'Open'];
+                return [w + c + u, w + c + u + o];
+            });
+            const dataLost = labels.map(k => {
+                const w = dataMap[k][type+'Won'];
+                const c = dataMap[k][type+'Commit'];
+                const u = dataMap[k][type+'Upside'];
+                const o = dataMap[k][type+'Open'];
+                const l = dataMap[k][type+'Lost'];
+                return [w + c + u + o, w + c + u + o + l];
+            });
+            const targetsData = labels.map(k => dataMap[k][targetKey]);
+            const displayTargets = showTarget ? targetsData : [];
+
+            if (canvasId === 'chartRenew') { if(chartRenewInstance) chartRenewInstance.destroy(); }
+            else { if(chartNewInstance) chartNewInstance.destroy(); }
+
+            let colorBase, colorCommit, colorUpside;
+            if (type === 'renew') {
+                colorBase = 'rgba(21, 128, 61, 1)'; // green-700
+                colorCommit = 'rgba(21, 128, 61, 0.7)';
+                colorUpside = 'rgba(21, 128, 61, 0.4)';
+            } else {
+                colorBase = 'rgba(126, 34, 206, 1)'; // purple-700
+                colorCommit = 'rgba(126, 34, 206, 0.7)';
+                colorUpside = 'rgba(126, 34, 206, 0.4)';
+            }
+
+            const newChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'เป้าหมาย', data: displayTargets,
+                            backgroundColor: 'transparent', borderColor: colorBase, borderWidth: 2, borderSkipped: false,           
+                            barThickness: 40, order: 5, datalabels: { display: false }
+                        },
+                        {
+                            label: 'ยอด Lost', data: dataLost,
+                            backgroundColor: 'rgba(239, 68, 68, 1)', borderColor: colorBase, 
+                            borderWidth: (context) => { const val = context.raw; return (val && val[1] > val[0]) ? 2 : 0; }, 
+                            barThickness: 24, order: 4, borderSkipped: false,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const lostAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    return lostAmt > 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = dataCommit[ctx.dataIndex][1] - dataCommit[ctx.dataIndex][0];
+                                    const upsideAmt = dataUpside[ctx.dataIndex][1] - dataUpside[ctx.dataIndex][0];
+                                    const openAmt = dataOpen[ctx.dataIndex][1] - dataOpen[ctx.dataIndex][0];
+                                    const lostAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    if(openAmt > 0) text += ` + {Open ${numFormat.format(openAmt)}}`;
+                                    if(lostAmt > 0) text += ` + {Lost ${numFormat.format(lostAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Open', data: dataOpen,
+                            backgroundColor: 'transparent', borderColor: colorBase, borderDash: [5, 5], 
+                            borderWidth: (context) => { const val = context.raw; return (val && val[1] > val[0]) ? 2 : 0; }, 
+                            barThickness: 24, order: 3, borderSkipped: false,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const openAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return openAmt > 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = dataCommit[ctx.dataIndex][1] - dataCommit[ctx.dataIndex][0];
+                                    const upsideAmt = dataUpside[ctx.dataIndex][1] - dataUpside[ctx.dataIndex][0];
+                                    const openAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    if(openAmt > 0) text += ` + {Open ${numFormat.format(openAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Upside', data: dataUpside,
+                            backgroundColor: colorUpside, borderWidth: 0, barThickness: 24, order: 2, 
+                            datalabels: { 
+                                display: function(context) { 
+                                    const upsideAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const openAmt = dataOpen[context.dataIndex][1] - dataOpen[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return upsideAmt > 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = dataCommit[ctx.dataIndex][1] - dataCommit[ctx.dataIndex][0];
+                                    const upsideAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Commit', data: dataCommit,
+                            backgroundColor: colorCommit, borderWidth: 0, barThickness: 24, order: 1, 
+                            datalabels: { 
+                                display: function(context) { 
+                                    const commitAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const upsideAmt = dataUpside[context.dataIndex][1] - dataUpside[context.dataIndex][0];
+                                    const openAmt = dataOpen[context.dataIndex][1] - dataOpen[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return commitAmt > 0 && upsideAmt === 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = dataWon[ctx.dataIndex];
+                                    const commitAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            label: 'ยอด Won', data: dataWon,
+                            backgroundColor: colorBase, borderWidth: 0, barThickness: 24, order: 0, 
+                            datalabels: { 
+                                display: function(context) { 
+                                    const wonAmt = context.dataset.data[context.dataIndex];
+                                    const commitAmt = dataCommit[context.dataIndex][1] - dataCommit[context.dataIndex][0];
+                                    const upsideAmt = dataUpside[context.dataIndex][1] - dataUpside[context.dataIndex][0];
+                                    const openAmt = dataOpen[context.dataIndex][1] - dataOpen[context.dataIndex][0];
+                                    const lostAmt = dataLost[context.dataIndex][1] - dataLost[context.dataIndex][0];
+                                    return wonAmt > 0 && commitAmt === 0 && upsideAmt === 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'right', anchor: 'end', color: '#333', offset: 6, font: { size: 11, weight: 'bold' },
+                                formatter: (val, ctx) => {
+                                    const wonAmt = val;
+                                    let text = numFormat.format(wonAmt);
+                                    if(showTarget) {
+                                        const target = targetsData[ctx.dataIndex];
+                                        if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    }
+                                    return text;
+                                }
+                            }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                    scales: { x: { beginAtZero: true, grid: { display: false } }, y: { grid: { display: false }, stacked: true } },
+                    plugins: { legend: { display: false }, tooltip: { callbacks: { label: tooltipCallback } } },
+                    layout: { padding: { right: 220, top: 20 } } 
+                }
+            });
+
+            if(canvasId === 'chartRenew') chartRenewInstance = newChart;
+            else chartNewInstance = newChart;
+        }
+
+        function updateMonthlyChart(canvasId, labels, actualsWon, actualsCommitFloat, actualsUpsideFloat, actualsOpenFloat, actualsLostFloat, targets) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            if (chartMonthlyInstance) chartMonthlyInstance.destroy();
+
+            const colorBase = 'rgba(30, 64, 175, 1)'; // blue-800
+            const colorCommit = 'rgba(30, 64, 175, 0.7)';
+            const colorUpside = 'rgba(30, 64, 175, 0.4)';
+
+            chartMonthlyInstance = new Chart(ctx, {
+                type: 'bar', 
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            type: 'line',
+                            label: 'เป้าหมายสะสม (Cumulative Target)',
+                            data: targets,
+                            backgroundColor: 'rgba(255, 159, 64, 0.5)', borderColor: 'rgba(255, 159, 64, 1)', borderWidth: 2,
+                            pointStyle: 'rectRot', pointRadius: 6, fill: false, order: 6, datalabels: { display: false }
+                        },
+                        {
+                            type: 'bar',
+                            label: 'ยอด Lost สะสม',
+                            data: actualsLostFloat,
+                            backgroundColor: 'rgba(239, 68, 68, 1)', borderColor: colorBase,
+                            borderWidth: (context) => { const val = context.raw; return (val && val[1] > val[0]) ? 2 : 0; },
+                            barThickness: 35, order: 5,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const lostAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    return lostAmt > 0;
+                                },
+                                align: 'top', anchor: 'end', color: '#333', font: { size: 10, weight: 'bold' }, rotation: -45, offset: 6,
+                                formatter: (val, ctx) => {
+                                    const wonAmt = actualsWon[ctx.dataIndex];
+                                    const commitAmt = actualsCommitFloat[ctx.dataIndex][1] - actualsCommitFloat[ctx.dataIndex][0];
+                                    const upsideAmt = actualsUpsideFloat[ctx.dataIndex][1] - actualsUpsideFloat[ctx.dataIndex][0];
+                                    const openAmt = actualsOpenFloat[ctx.dataIndex][1] - actualsOpenFloat[ctx.dataIndex][0];
+                                    const lostAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    const target = targets[ctx.dataIndex];
+                                    if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    if(openAmt > 0) text += ` + {Open ${numFormat.format(openAmt)}}`;
+                                    if(lostAmt > 0) text += ` + {Lost ${numFormat.format(lostAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            type: 'bar',
+                            label: 'ยอด Open สะสม',
+                            data: actualsOpenFloat,
+                            backgroundColor: 'transparent', borderColor: colorBase, borderWidth: 2, borderDash: [5, 5],
+                            barThickness: 35, order: 4, borderSkipped: false,
+                            datalabels: {
+                                display: function(context) { 
+                                    const openAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const lostAmt = actualsLostFloat[context.dataIndex][1] - actualsLostFloat[context.dataIndex][0];
+                                    return openAmt > 0 && lostAmt === 0;
+                                },
+                                align: 'top', anchor: 'end', color: '#333', font: { size: 10, weight: 'bold' }, rotation: -45, offset: 6,
+                                formatter: (val, ctx) => {
+                                    const wonAmt = actualsWon[ctx.dataIndex];
+                                    const commitAmt = actualsCommitFloat[ctx.dataIndex][1] - actualsCommitFloat[ctx.dataIndex][0];
+                                    const upsideAmt = actualsUpsideFloat[ctx.dataIndex][1] - actualsUpsideFloat[ctx.dataIndex][0];
+                                    const openAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    const target = targets[ctx.dataIndex];
+                                    if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    if(openAmt > 0) text += ` + {Open ${numFormat.format(openAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            type: 'bar',
+                            label: 'ยอด Upside สะสม',
+                            data: actualsUpsideFloat,
+                            backgroundColor: colorUpside, barThickness: 35, order: 3,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const upsideAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const openAmt = actualsOpenFloat[context.dataIndex][1] - actualsOpenFloat[context.dataIndex][0];
+                                    const lostAmt = actualsLostFloat[context.dataIndex][1] - actualsLostFloat[context.dataIndex][0];
+                                    return upsideAmt > 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'top', anchor: 'end', color: '#333', font: { size: 10, weight: 'bold' }, rotation: -45, offset: 6,
+                                formatter: (val, ctx) => {
+                                    const wonAmt = actualsWon[ctx.dataIndex];
+                                    const commitAmt = actualsCommitFloat[ctx.dataIndex][1] - actualsCommitFloat[ctx.dataIndex][0];
+                                    const upsideAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    const target = targets[ctx.dataIndex];
+                                    if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    if(upsideAmt > 0) text += ` + {Up ${numFormat.format(upsideAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            type: 'bar',
+                            label: 'ยอด Commit สะสม',
+                            data: actualsCommitFloat,
+                            backgroundColor: colorCommit, barThickness: 35, order: 2,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const commitAmt = context.dataset.data[context.dataIndex][1] - context.dataset.data[context.dataIndex][0];
+                                    const upsideAmt = actualsUpsideFloat[context.dataIndex][1] - actualsUpsideFloat[context.dataIndex][0];
+                                    const openAmt = actualsOpenFloat[context.dataIndex][1] - actualsOpenFloat[context.dataIndex][0];
+                                    const lostAmt = actualsLostFloat[context.dataIndex][1] - actualsLostFloat[context.dataIndex][0];
+                                    return commitAmt > 0 && upsideAmt === 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'top', anchor: 'end', color: '#333', font: { size: 10, weight: 'bold' }, rotation: -45, offset: 6,
+                                formatter: (val, ctx) => {
+                                    const wonAmt = actualsWon[ctx.dataIndex];
+                                    const commitAmt = val[1] - val[0];
+                                    let text = numFormat.format(wonAmt);
+                                    const target = targets[ctx.dataIndex];
+                                    if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    if(commitAmt > 0) text += ` + {C ${numFormat.format(commitAmt)}}`;
+                                    return text;
+                                }
+                            }
+                        },
+                        {
+                            type: 'bar',
+                            label: 'ยอด Won สะสม',
+                            data: actualsWon,
+                            backgroundColor: colorBase, barThickness: 35, order: 1,
+                            datalabels: { 
+                                display: function(context) { 
+                                    const wonAmt = context.dataset.data[context.dataIndex];
+                                    const commitAmt = actualsCommitFloat[context.dataIndex][1] - actualsCommitFloat[context.dataIndex][0];
+                                    const upsideAmt = actualsUpsideFloat[context.dataIndex][1] - actualsUpsideFloat[context.dataIndex][0];
+                                    const openAmt = actualsOpenFloat[context.dataIndex][1] - actualsOpenFloat[context.dataIndex][0];
+                                    const lostAmt = actualsLostFloat[context.dataIndex][1] - actualsLostFloat[context.dataIndex][0];
+                                    return wonAmt > 0 && commitAmt === 0 && upsideAmt === 0 && openAmt === 0 && lostAmt === 0;
+                                },
+                                align: 'top', anchor: 'end', color: '#333', font: { size: 10, weight: 'bold' }, rotation: -45, offset: 6,
+                                formatter: (val, ctx) => {
+                                    const wonAmt = val;
+                                    let text = numFormat.format(wonAmt);
+                                    const target = targets[ctx.dataIndex];
+                                    if(target > 0) text += ` (${(wonAmt / target * 100).toFixed(1)}%)`;
+                                    return text;
+                                }
+                            }
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { 
+                        x: { grid: { display: false }, stacked: true }, 
+                        y: { beginAtZero: true, title: { display: true, text: 'จำนวนเงิน (Cumulative)' }, stacked: false } 
+                    },
+                    plugins: { 
+                        legend: { position: 'bottom' },
+                        tooltip: { callbacks: { label: tooltipCallback } }
+                    },
+                    layout: { padding: { top: 120, right: 40 } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
