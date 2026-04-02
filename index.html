@@ -788,7 +788,7 @@
                     class="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-600 hover:bg-red-200 transition">
                     ล้างหน้าจอ
                 </button>
-                 <span class="px-2 py-1 rounded text-xs font-bold border border-gray-300 text-gray-600">Rev.1.0</span>
+                 <span class="px-2 py-1 rounded text-xs font-bold border border-gray-300 text-gray-600">Rev.1.1</span>
             </div>
         </header>
 
@@ -985,6 +985,12 @@
                         class="px-4 py-2 bg-gray-200 text-gray-700 font-semibold text-sm rounded hover:bg-gray-300 transition w-full md:w-auto mt-2 md:mt-0">
                         ล้างคำค้นหา
                     </button>
+
+                    <div class="flex items-center gap-2 ml-auto mt-2 md:mt-0">
+                        <span class="text-sm font-bold text-gray-700 whitespace-nowrap">ยอดรวม</span>
+                        <span id="tableTotalAmount"
+                            class="px-4 py-2 border border-blue-300 bg-blue-50 rounded text-sm font-bold text-blue-900 whitespace-nowrap min-w-[120px] text-right">0</span>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto max-h-[500px]">
@@ -1053,6 +1059,7 @@
             $('#customSearch1, #customSearch2, #customSearch3').on('input', function () {
                 if (dataTableInstance) {
                     dataTableInstance.draw();
+                    updateTableTotal();
                 }
             });
         });
@@ -1063,7 +1070,25 @@
             $('#customSearch3').val('');
             if (dataTableInstance) {
                 dataTableInstance.draw();
+                updateTableTotal();
             }
+        }
+
+        function updateTableTotal() {
+            if (!dataTableInstance) {
+                document.getElementById('tableTotalAmount').innerText = '0';
+                return;
+            }
+            let total = 0;
+            dataTableInstance.rows({ search: 'applied' }).data().each(function (row) {
+                const val = row[6];
+                if (typeof val === 'number') {
+                    total += val;
+                } else {
+                    total += parseFloat(String(val).replace(/,/g, '')) || 0;
+                }
+            });
+            document.getElementById('tableTotalAmount').innerText = formatter.format(Math.round(total));
         }
         // ---------------------------------------------------
 
@@ -1535,6 +1560,7 @@
                 });
 
                 reinitDataTable(tableData);
+                updateTableTotal();
                 showLoading(false);
 
             }, 50);
