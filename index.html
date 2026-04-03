@@ -1026,7 +1026,7 @@
         let dataTableInstance = null;
 
         const formatter = new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-        const numFormat = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 0 });
+        const numFormat = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
         // --- Custom DataTables Filter (3 Criteria Search - AND) ---
         $.fn.dataTable.ext.search.push(
@@ -1133,7 +1133,7 @@
                     { data: 3, render: function (data) { return `<div class="truncate max-w-[200px]" title="${data}">${data}</div>`; } },
                     { data: 4, className: "text-center" },
                     { data: 5, className: "text-center" },
-                    { data: 6, className: "text-right font-medium text-gray-800" }
+                    { data: 6, className: "text-right font-medium text-gray-800", render: function(data) { return formatter.format(Math.round(Number(data) || 0)); } }
                 ]
             });
         }
