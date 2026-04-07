@@ -906,9 +906,9 @@
                     <div id="periodSubRange" class="col-span-2" style="display:none;">
                         <label class="text-xs text-gray-500">ตั้งแต่ - ถึง</label>
                         <div class="flex gap-2">
-                            <input type="month" id="startMonth" onchange="updateDashboard()"
+                            <input type="month" id="startMonth" onchange="onRangeChange()"
                                 class="flex-1 p-2 border border-gray-300 rounded text-sm">
-                            <input type="month" id="endMonth" onchange="updateDashboard()"
+                            <input type="month" id="endMonth" onchange="onRangeChange()"
                                 class="flex-1 p-2 border border-gray-300 rounded text-sm">
                         </div>
                     </div>
@@ -1062,6 +1062,8 @@
         let chartNewInstance = null;
         let chartMonthlyInstance = null;
         let dataTableInstance = null;
+        let savedRangeStart = '';
+        let savedRangeEnd = '';
 
         const formatter = new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 0, maximumFractionDigits: 0 });
         const numFormat = new Intl.NumberFormat('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -1111,6 +1113,8 @@
                 // Range default
                 document.getElementById('startMonth').value = y + '-01';
                 document.getElementById('endMonth').value = y + '-12';
+                savedRangeStart = y + '-01';
+                savedRangeEnd = y + '-12';
             })();
 
             // เมื่อพิมพ์ค้นหา ให้สั่ง Table อัปเดตทันที
@@ -1403,7 +1407,21 @@
             document.getElementById('periodSubYear').style.display = type === 'year' ? '' : 'none';
             document.getElementById('periodSubQuarter').style.display = type === 'quarter' ? '' : 'none';
             document.getElementById('periodSubRange').style.display = type === 'range' ? '' : 'none';
+
+            // เมื่อสลับมา Range ให้คืนค่าที่เคยบันทึกไว้
+            if (type === 'range') {
+                document.getElementById('startMonth').value = savedRangeStart;
+                document.getElementById('endMonth').value = savedRangeEnd;
+            }
+
             applyPeriodSelection();
+        }
+
+        function onRangeChange() {
+            // บันทึกค่า Range เมื่อผู้ใช้เปลี่ยนแปลง
+            savedRangeStart = document.getElementById('startMonth').value;
+            savedRangeEnd = document.getElementById('endMonth').value;
+            updateDashboard();
         }
 
         function applyPeriodSelection() {
@@ -1424,7 +1442,7 @@
                 startVal = y + '-' + String(qStart).padStart(2, '0');
                 endVal = y + '-' + String(qEnd).padStart(2, '0');
             } else {
-                // Range mode: use existing startMonth/endMonth values as-is
+                // Range mode: ใช้ค่าที่บันทึกไว้
                 updateDashboard();
                 return;
             }
